@@ -286,6 +286,19 @@
     <!-- Sleep timer -->
     <string name="set_as_default">Set as default</string>
     <string name="sleep_timer_default_set">Sleep timer default set to %d min</string>
+    <string name="alarm">Alarm</string>
+    <string name="alarm_enabled">Enable alarm</string>
+    <string name="alarm_time">Alarm time</string>
+    <string name="alarm_playlist">Playlist</string>
+    <string name="alarm_select_playlist">Select playlist</string>
+    <string name="alarm_no_playlists">No playlists found</string>
+    <string name="alarm_random_song">Play random song from playlist</string>
+    <string name="alarm_next_trigger">Next trigger</string>
+    <string name="alarm_not_scheduled">Not scheduled</string>
+    <string name="alarm_exact_permission_title">Allow exact alarms</string>
+    <string name="alarm_exact_permission_desc">Exact alarm permission improves reliability when the app is in the background.</string>
+    <string name="alarm_battery_optimization_title">Battery optimization</string>
+    <string name="alarm_battery_optimization_desc">Disable battery optimization for better alarm reliability in the background.</string>
 
     <!-- Player Settings -->
     <string name="disable_load_more_when_repeat_all">Disable load more when repeat all</string>

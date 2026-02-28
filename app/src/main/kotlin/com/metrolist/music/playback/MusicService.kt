@@ -162,6 +162,7 @@ import com.metrolist.music.models.PersistQueue
 import com.metrolist.music.models.toMediaMetadata
 import com.metrolist.music.playback.audio.SilenceDetectorAudioProcessor
 import com.metrolist.music.playback.queues.EmptyQueue
+import com.metrolist.music.playback.queues.ListQueue
 import com.metrolist.music.playback.queues.Queue
 import com.metrolist.music.playback.queues.YouTubeQueue
 import com.metrolist.music.playback.queues.filterExplicit
@@ -207,6 +208,7 @@ import java.io.ObjectOutputStream
 import java.time.LocalDateTime
 import javax.inject.Inject
 import kotlin.coroutines.coroutineContext
+import kotlin.random.Random
 import kotlin.time.Duration.Companion.seconds
 
 private const val INSTANT_SILENCE_SKIP_STEP_MS = 15_000L
@@ -3059,6 +3061,10 @@ class MusicService :
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
+            ACTION_ALARM_TRIGGER -> {
+                handleAlarmTrigger(intent)
+            }
+
             MusicWidgetReceiver.ACTION_PLAY_PAUSE -> {
                 if (player.isPlaying) player.pause() else player.play()
                 updateWidgetUI(player.isPlaying)
@@ -3084,6 +3090,32 @@ class MusicService :
         }
 
         return super.onStartCommand(intent, flags, startId)
+    }
+
+    private fun handleAlarmTrigger(intent: Intent) {
+        val playlistId = intent.getStringExtra(EXTRA_ALARM_PLAYLIST_ID).orEmpty()
+        if (playlistId.isBlank()) return
+        val randomSong = intent.getBooleanExtra(EXTRA_ALARM_RANDOM_SONG, false)
+        scope.launch {
+            val playlistSongs = withContext(Dispatchers.IO) {
+                database.playlistSongs(playlistId).first()
+            }
+            if (playlistSongs.isEmpty()) return@launch
+            val items = playlistSongs.map { it.song.toMediaItem() }
+            val playlistName = withContext(Dispatchers.IO) {
+                database.playlist(playlistId).first()?.playlist?.name
+            }
+            val startIndex = if (randomSong) Random.nextInt(items.size) else 0
+            playQueue(
+                ListQueue(
+                    title = playlistName,
+                    items = items,
+                    startIndex = startIndex,
+                    position = 0L
+                ),
+                playWhenReady = true
+            )
+        }
     }
 
     /**
@@ -3359,6 +3391,10 @@ class MusicService :
     }
 
     companion object {
+        const val ACTION_ALARM_TRIGGER = "com.metrolist.music.action.ALARM_TRIGGER"
+        const val EXTRA_ALARM_PLAYLIST_ID = "extra_alarm_playlist_id"
+        const val EXTRA_ALARM_RANDOM_SONG = "extra_alarm_random_song"
+
         const val ROOT = "root"
         const val SONG = "song"
         const val ARTIST = "artist"

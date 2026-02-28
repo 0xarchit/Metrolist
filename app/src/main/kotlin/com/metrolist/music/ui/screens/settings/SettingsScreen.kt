@@ -88,6 +88,11 @@ fun SettingsScreen(
                     onClick = { navController.navigate("settings/player") }
                 ),
                 Material3SettingsItem(
+                    icon = painterResource(R.drawable.bedtime),
+                    title = { Text(stringResource(R.string.alarm)) },
+                    onClick = { navController.navigate("settings/alarm") }
+                ),
+                Material3SettingsItem(
                     icon = painterResource(R.drawable.language),
                     title = { Text(stringResource(R.string.content)) },
                     onClick = { navController.navigate("settings/content") }
