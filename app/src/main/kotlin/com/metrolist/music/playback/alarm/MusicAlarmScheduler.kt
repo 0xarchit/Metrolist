@@ -6,70 +6,48 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.datastore.preferences.core.edit
-import com.metrolist.music.constants.AlarmEnabledKey
-import com.metrolist.music.constants.AlarmHourKey
-import com.metrolist.music.constants.AlarmMinuteKey
 import com.metrolist.music.constants.AlarmNextTriggerAtKey
-import com.metrolist.music.constants.AlarmPlaylistIdKey
-import com.metrolist.music.constants.AlarmRandomSongKey
 import com.metrolist.music.playback.MusicService
 import com.metrolist.music.utils.dataStore
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import java.util.Calendar
 
 object MusicAlarmScheduler {
-    private const val REQUEST_CODE = 90421
-
     fun scheduleFromPreferences(context: Context) {
-        runBlocking(Dispatchers.IO) {
-            val prefs = context.dataStore.data.first()
-            val enabled = prefs[AlarmEnabledKey] ?: false
-            val playlistId = prefs[AlarmPlaylistIdKey].orEmpty()
-            val hour = prefs[AlarmHourKey] ?: 7
-            val minute = prefs[AlarmMinuteKey] ?: 0
-            val random = prefs[AlarmRandomSongKey] ?: false
-            if (!enabled || playlistId.isBlank()) {
-                cancel(context)
-                return@runBlocking
-            }
-            schedule(context, hour, minute, playlistId, random)
-        }
+        val alarms = MusicAlarmStore.load(context)
+        scheduleAll(context, alarms)
     }
 
-    fun schedule(
-        context: Context,
-        hour: Int,
-        minute: Int,
-        playlistId: String,
-        randomSong: Boolean
-    ) {
-        if (playlistId.isBlank()) {
-            cancel(context)
-            return
-        }
+    fun scheduleAll(context: Context, alarms: List<MusicAlarmEntry>) {
         val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
-        val triggerAtMillis = nextTriggerMillis(hour, minute)
-        val pendingIntent = alarmPendingIntent(context, playlistId, randomSong)
-        alarmManager.cancel(pendingIntent)
+        val updated = alarms.map { alarm ->
+            cancel(context, alarm.id)
+            if (!alarm.enabled || alarm.playlistId.isBlank()) {
+                alarm.copy(nextTriggerAt = -1L)
+            } else {
+                val triggerAtMillis = nextTriggerMillis(alarm.hour, alarm.minute)
+                val pendingIntent = alarmPendingIntent(context, alarm)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-        } else {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-        }
-
-        runBlocking(Dispatchers.IO) {
-            context.dataStore.edit { prefs ->
-                prefs[AlarmNextTriggerAtKey] = triggerAtMillis
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                } else {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                }
+                alarm.copy(nextTriggerAt = triggerAtMillis)
             }
         }
+        MusicAlarmStore.save(context, updated)
     }
 
-    fun cancel(context: Context) {
+    fun cancel(context: Context, alarmId: String) {
         val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
-        alarmManager.cancel(alarmPendingIntent(context, "", false))
+        alarmManager.cancel(alarmPendingIntent(context, alarmId))
+    }
+
+    fun cancelAll(context: Context) {
+        val existing = MusicAlarmStore.load(context)
+        existing.forEach { cancel(context, it.id) }
         runBlocking(Dispatchers.IO) {
             context.dataStore.edit { prefs ->
                 prefs[AlarmNextTriggerAtKey] = -1L
@@ -79,20 +57,37 @@ object MusicAlarmScheduler {
 
     private fun alarmPendingIntent(
         context: Context,
-        playlistId: String,
-        randomSong: Boolean
+        alarm: MusicAlarmEntry
     ): PendingIntent {
         val intent = Intent(context, MusicAlarmReceiver::class.java)
             .setAction(MusicAlarmReceiver.ACTION_TRIGGER_ALARM)
-            .putExtra(MusicService.EXTRA_ALARM_PLAYLIST_ID, playlistId)
-            .putExtra(MusicService.EXTRA_ALARM_RANDOM_SONG, randomSong)
+            .putExtra(MusicService.EXTRA_ALARM_ID, alarm.id)
+            .putExtra(MusicService.EXTRA_ALARM_PLAYLIST_ID, alarm.playlistId)
+            .putExtra(MusicService.EXTRA_ALARM_RANDOM_SONG, alarm.randomSong)
 
         return PendingIntent.getBroadcast(
             context,
-            REQUEST_CODE,
+            requestCode(alarm.id),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+    }
+
+    private fun alarmPendingIntent(context: Context, alarmId: String): PendingIntent {
+        val intent = Intent(context, MusicAlarmReceiver::class.java)
+            .setAction(MusicAlarmReceiver.ACTION_TRIGGER_ALARM)
+            .putExtra(MusicService.EXTRA_ALARM_ID, alarmId)
+
+        return PendingIntent.getBroadcast(
+            context,
+            requestCode(alarmId),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    private fun requestCode(alarmId: String): Int {
+        return 90_000 + (alarmId.hashCode().let { if (it == Int.MIN_VALUE) 0 else kotlin.math.abs(it) } % 9_000)
     }
 
     private fun nextTriggerMillis(hour: Int, minute: Int): Long {
