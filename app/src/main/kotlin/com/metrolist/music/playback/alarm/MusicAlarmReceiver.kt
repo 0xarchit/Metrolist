@@ -10,6 +10,7 @@ import com.metrolist.music.playback.MusicService
 class MusicAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action != ACTION_TRIGGER_ALARM) return
+        val alarmId = intent.getStringExtra(MusicService.EXTRA_ALARM_ID).orEmpty()
         val playlistId = intent.getStringExtra(MusicService.EXTRA_ALARM_PLAYLIST_ID).orEmpty()
         val randomSong = intent.getBooleanExtra(MusicService.EXTRA_ALARM_RANDOM_SONG, false)
         val powerManager = context.getSystemService(PowerManager::class.java)
@@ -18,6 +19,7 @@ class MusicAlarmReceiver : BroadcastReceiver() {
             wakeLock?.acquire(60_000)
             val serviceIntent = Intent(context, MusicService::class.java)
                 .setAction(MusicService.ACTION_ALARM_TRIGGER)
+                .putExtra(MusicService.EXTRA_ALARM_ID, alarmId)
                 .putExtra(MusicService.EXTRA_ALARM_PLAYLIST_ID, playlistId)
                 .putExtra(MusicService.EXTRA_ALARM_RANDOM_SONG, randomSong)
             ContextCompat.startForegroundService(context, serviceIntent)
