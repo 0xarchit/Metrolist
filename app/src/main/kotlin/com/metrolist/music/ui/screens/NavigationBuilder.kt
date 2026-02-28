@@ -43,6 +43,7 @@ import com.metrolist.music.ui.screens.search.OnlineSearchResult
 import com.metrolist.music.ui.screens.search.SearchScreen
 import com.metrolist.music.ui.screens.settings.AboutScreen
 import com.metrolist.music.ui.screens.settings.AiSettings
+import com.metrolist.music.ui.screens.settings.AlarmSettings
 import com.metrolist.music.ui.screens.settings.AppearanceSettings
 import com.metrolist.music.ui.screens.settings.BackupAndRestore
 import com.metrolist.music.ui.screens.settings.ContentSettings
@@ -365,6 +366,10 @@ fun NavGraphBuilder.navigationBuilder(
 
     composable("settings/player") {
         PlayerSettings(navController)
+    }
+
+    composable("settings/alarm") {
+        AlarmSettings(navController, scrollBehavior)
     }
 
     composable("settings/storage") {
