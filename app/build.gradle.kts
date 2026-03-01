@@ -23,7 +23,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 142
-        versionName = "13.2.0"
+        versionName = "13.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -34,9 +34,10 @@ android {
 
         buildConfigField("String", "LASTFM_API_KEY", "\"$lastFmKey\"")
         buildConfigField("String", "LASTFM_SECRET", "\"$lastFmSecret\"")
+        buildConfigField("String", "ARCHITECTURE", "\"universal\"")
     }
 
-    flavorDimensions += listOf("abi", "variant")
+    flavorDimensions += listOf("variant")
     productFlavors {
         // FOSS variant (default) - F-Droid compatible, no Google Play Services
         create("foss") {
@@ -44,32 +45,11 @@ android {
             isDefault = true
             buildConfigField("Boolean", "CAST_AVAILABLE", "false")
         }
-        
+
         // GMS variant - with Google Cast support (requires Google Play Services)
         create("gms") {
             dimension = "variant"
             buildConfigField("Boolean", "CAST_AVAILABLE", "true")
-        }
-        
-        create("universal") {
-            dimension = "abi"
-            buildConfigField("String", "ARCHITECTURE", "\"universal\"")
-        }
-        create("arm64") {
-            dimension = "abi"
-            buildConfigField("String", "ARCHITECTURE", "\"arm64\"")
-        }
-        create("armeabi") {
-            dimension = "abi"
-            buildConfigField("String", "ARCHITECTURE", "\"armeabi\"")
-        }
-        create("x86") {
-            dimension = "abi"
-            buildConfigField("String", "ARCHITECTURE", "\"x86\"")
-        }
-        create("x86_64") {
-            dimension = "abi"
-            buildConfigField("String", "ARCHITECTURE", "\"x86_64\"")
         }
     }
 
@@ -93,9 +73,6 @@ android {
             storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
         }
     }
-
-    // R8 optimization configuration for smaller DEX files
-    buildFeatures.aidl = false  // Disable AIDL if not used
 
     buildTypes {
         release {
@@ -133,10 +110,6 @@ android {
         }
     }
 
-    composeCompiler {
-        includeSourceInformation = false
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
@@ -162,7 +135,8 @@ android {
         jniLibs {
             useLegacyPackaging = false
             keepDebugSymbols += listOf(
-                "**/libandroidx.graphics.path.so"
+                "**/libandroidx.graphics.path.so",
+                "**/libdatastore_shared_counter.so"
             )
         }
         resources {
