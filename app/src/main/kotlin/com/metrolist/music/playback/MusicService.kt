@@ -119,6 +119,7 @@ import com.metrolist.music.constants.PauseListenHistoryKey
 import com.metrolist.music.constants.PauseOnMute
 import com.metrolist.music.constants.PersistentQueueKey
 import com.metrolist.music.constants.PersistentShuffleAcrossQueuesKey
+import com.metrolist.music.playback.alarm.MusicAlarmScheduler
 import com.metrolist.music.constants.PlayerVolumeKey
 import com.metrolist.music.constants.RememberShuffleAndRepeatKey
 import com.metrolist.music.constants.RepeatModeKey
@@ -3208,6 +3209,7 @@ class MusicService :
     }
 
     private fun handleAlarmTrigger(intent: Intent) {
+        MusicAlarmScheduler.scheduleFromPreferences(this)
         val playlistId = intent.getStringExtra(EXTRA_ALARM_PLAYLIST_ID).orEmpty()
         if (playlistId.isBlank()) return
         val randomSong = intent.getBooleanExtra(EXTRA_ALARM_RANDOM_SONG, false)
@@ -3220,12 +3222,27 @@ class MusicService :
             val playlistName = withContext(Dispatchers.IO) {
                 database.playlist(playlistId).first()?.playlist?.name
             }
-            val startIndex = if (randomSong) Random.nextInt(items.size) else 0
+
+            val alarmItems =
+                if (randomSong) {
+                    val firstIndex = Random.nextInt(items.size)
+                    buildList(items.size) {
+                        add(items[firstIndex])
+                        items.forEachIndexed { index, item ->
+                            if (index != firstIndex) add(item)
+                        }
+                    }
+                } else {
+                    items
+                }
+
+            player.stop()
+            player.clearMediaItems()
             playQueue(
                 ListQueue(
                     title = playlistName,
-                    items = items,
-                    startIndex = startIndex,
+                    items = alarmItems,
+                    startIndex = 0,
                     position = 0L
                 ),
                 playWhenReady = true

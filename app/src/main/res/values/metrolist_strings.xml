@@ -269,6 +269,7 @@
     <string name="sleep_timer_fade_out_title">Fade out</string>
     <string name="sleep_timer_fade_out_description">Fades out the volume in the final minute</string>
 
+    <!-- Alarm -->
     <string name="alarm">Alarm</string>
     <string name="alarm_enabled">Enable alarm</string>
     <string name="alarm_time">Alarm time</string>

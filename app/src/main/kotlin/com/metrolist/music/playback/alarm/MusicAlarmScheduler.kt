@@ -5,12 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import androidx.datastore.preferences.core.edit
-import com.metrolist.music.constants.AlarmNextTriggerAtKey
 import com.metrolist.music.playback.MusicService
-import com.metrolist.music.utils.dataStore
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import java.util.Calendar
 
 object MusicAlarmScheduler {
@@ -43,37 +38,44 @@ object MusicAlarmScheduler {
     fun cancel(context: Context, alarmId: String) {
         val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
         alarmManager.cancel(alarmPendingIntent(context, alarmId))
-    }
-
-    fun cancelAll(context: Context) {
-        val existing = MusicAlarmStore.load(context)
-        existing.forEach { cancel(context, it.id) }
-        runBlocking(Dispatchers.IO) {
-            context.dataStore.edit { prefs ->
-                prefs[AlarmNextTriggerAtKey] = -1L
-            }
-        }
+        alarmManager.cancel(legacyAlarmPendingIntent(context, alarmId))
     }
 
     private fun alarmPendingIntent(
         context: Context,
         alarm: MusicAlarmEntry
     ): PendingIntent {
-        val intent = Intent(context, MusicAlarmReceiver::class.java)
-            .setAction(MusicAlarmReceiver.ACTION_TRIGGER_ALARM)
+        val intent = Intent(context, MusicService::class.java)
+            .setAction(MusicService.ACTION_ALARM_TRIGGER)
             .putExtra(MusicService.EXTRA_ALARM_ID, alarm.id)
             .putExtra(MusicService.EXTRA_ALARM_PLAYLIST_ID, alarm.playlistId)
             .putExtra(MusicService.EXTRA_ALARM_RANDOM_SONG, alarm.randomSong)
 
-        return PendingIntent.getBroadcast(
+        return foregroundServicePendingIntent(context, alarm.id, intent)
+    }
+
+    private fun alarmPendingIntent(context: Context, alarmId: String): PendingIntent {
+        val intent = Intent(context, MusicService::class.java)
+            .setAction(MusicService.ACTION_ALARM_TRIGGER)
+            .putExtra(MusicService.EXTRA_ALARM_ID, alarmId)
+
+        return foregroundServicePendingIntent(context, alarmId, intent)
+    }
+
+    private fun foregroundServicePendingIntent(
+        context: Context,
+        alarmId: String,
+        intent: Intent
+    ): PendingIntent {
+        return PendingIntent.getForegroundService(
             context,
-            requestCode(alarm.id),
+            requestCode(alarmId),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
 
-    private fun alarmPendingIntent(context: Context, alarmId: String): PendingIntent {
+    private fun legacyAlarmPendingIntent(context: Context, alarmId: String): PendingIntent {
         val intent = Intent(context, MusicAlarmReceiver::class.java)
             .setAction(MusicAlarmReceiver.ACTION_TRIGGER_ALARM)
             .putExtra(MusicService.EXTRA_ALARM_ID, alarmId)
