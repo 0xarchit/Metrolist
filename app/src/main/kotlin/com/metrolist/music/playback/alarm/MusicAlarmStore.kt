@@ -36,7 +36,7 @@ object MusicAlarmStore {
             .getString(ALARM_PREFS_ENTRIES, null)
             .orEmpty()
         if (protectedRaw.isNotBlank()) {
-            return parse(protectedRaw)
+            parse(protectedRaw)?.let { return it }
         }
 
         return runCatching {
@@ -44,6 +44,14 @@ object MusicAlarmStore {
             val raw = prefs[AlarmEntriesKey].orEmpty()
             if (raw.isNotBlank()) {
                 parse(raw)
+                    ?: migrateLegacy(
+                        prefs[AlarmEnabledKey] ?: false,
+                        prefs[AlarmHourKey] ?: 7,
+                        prefs[AlarmMinuteKey] ?: 0,
+                        prefs[AlarmPlaylistIdKey].orEmpty(),
+                        prefs[AlarmRandomSongKey] ?: false,
+                        prefs[AlarmNextTriggerAtKey] ?: -1L
+                    )
             } else {
                 migrateLegacy(prefs[AlarmEnabledKey] ?: false, prefs[AlarmHourKey] ?: 7, prefs[AlarmMinuteKey] ?: 0, prefs[AlarmPlaylistIdKey].orEmpty(), prefs[AlarmRandomSongKey] ?: false, prefs[AlarmNextTriggerAtKey] ?: -1L)
             }
@@ -128,8 +136,8 @@ object MusicAlarmStore {
         return array.toString()
     }
 
-    private fun parse(raw: String): List<MusicAlarmEntry> {
-        val array = runCatching { JSONArray(raw) }.getOrElse { return emptyList() }
+    private fun parse(raw: String): List<MusicAlarmEntry>? {
+        val array = runCatching { JSONArray(raw) }.getOrElse { return null }
         return buildList {
             for (index in 0 until array.length()) {
                 val item = array.optJSONObject(index) ?: continue

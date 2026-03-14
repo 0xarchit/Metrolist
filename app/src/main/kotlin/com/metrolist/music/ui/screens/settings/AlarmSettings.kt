@@ -138,9 +138,11 @@ fun AlarmSettingsSection(showTitle: Boolean = true) {
         }.sortedBy { it.hour * 60 + it.minute }
     }
 
-    fun persistAndSchedule(newList: List<MusicAlarmEntry>) {
+    fun persistAndSchedule(transform: (List<MusicAlarmEntry>) -> List<MusicAlarmEntry>) {
         scope.launch {
             persistMutex.withLock {
+                val latest = loadAlarms()
+                val newList = transform(latest)
                 withContext(Dispatchers.IO) {
                     MusicAlarmScheduler.scheduleAll(context, newList)
                 }
@@ -163,8 +165,9 @@ fun AlarmSettingsSection(showTitle: Boolean = true) {
                 editorTarget = null
             },
             onSave = { updated ->
-                val merged = alarms.filterNot { it.id == updated.id } + updated
-                persistAndSchedule(merged)
+                persistAndSchedule { current ->
+                    current.filterNot { it.id == updated.id } + updated
+                }
                 showEditor = false
                 editorTarget = null
             }
@@ -234,16 +237,18 @@ fun AlarmSettingsSection(showTitle: Boolean = true) {
                                     AlarmSwitch(
                                         checked = alarm.enabled,
                                         onCheckedChange = { enabled ->
-                                            val updated = alarms.map {
-                                                if (it.id == alarm.id) it.copy(enabled = enabled) else it
+                                            persistAndSchedule { current ->
+                                                current.map {
+                                                    if (it.id == alarm.id) it.copy(enabled = enabled) else it
+                                                }
                                             }
-                                            persistAndSchedule(updated)
                                         }
                                     )
                                     IconButton(
                                         onClick = {
-                                            val updated = alarms.filterNot { it.id == alarm.id }
-                                            persistAndSchedule(updated)
+                                            persistAndSchedule { current ->
+                                                current.filterNot { it.id == alarm.id }
+                                            }
                                         }
                                     ) {
                                         Icon(

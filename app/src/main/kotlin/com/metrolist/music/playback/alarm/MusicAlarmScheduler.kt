@@ -16,8 +16,9 @@ object MusicAlarmScheduler {
 
     fun scheduleAll(context: Context, alarms: List<MusicAlarmEntry>) {
         val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
-        alarms.forEach { alarm ->
-            cancel(context, alarm.id)
+        val knownAlarmIds = (MusicAlarmStore.loadBlocking(context).map { it.id } + alarms.map { it.id }).distinct()
+        knownAlarmIds.forEach { alarmId ->
+            cancel(context, alarmId)
         }
         val updated = alarms.map { alarm ->
             if (!alarm.enabled || alarm.playlistId.isBlank()) {
@@ -91,7 +92,7 @@ object MusicAlarmScheduler {
     }
 
     private fun requestCode(alarmId: String): Int {
-        return 90_000 + (alarmId.hashCode().let { if (it == Int.MIN_VALUE) 0 else kotlin.math.abs(it) } % 9_000)
+        return alarmId.hashCode() and Int.MAX_VALUE
     }
 
     private fun nextTriggerMillis(hour: Int, minute: Int): Long {

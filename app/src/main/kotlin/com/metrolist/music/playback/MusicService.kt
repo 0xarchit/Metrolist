@@ -120,6 +120,7 @@ import com.metrolist.music.constants.PauseOnMute
 import com.metrolist.music.constants.PersistentQueueKey
 import com.metrolist.music.constants.PersistentShuffleAcrossQueuesKey
 import com.metrolist.music.playback.alarm.MusicAlarmScheduler
+import com.metrolist.music.playback.alarm.MusicAlarmStore
 import com.metrolist.music.constants.PlayerVolumeKey
 import com.metrolist.music.constants.RememberShuffleAndRepeatKey
 import com.metrolist.music.constants.RepeatModeKey
@@ -3210,45 +3211,83 @@ class MusicService :
 
     private fun handleAlarmTrigger(intent: Intent) {
         scope.launch(Dispatchers.IO) {
-            MusicAlarmScheduler.scheduleFromPreferences(this@MusicService)
+            try {
+                MusicAlarmScheduler.scheduleFromPreferences(this@MusicService)
+            } catch (t: Throwable) {
+                Timber.tag(TAG).e(t, "Failed to reschedule alarms after trigger")
+            }
         }
         val playlistId = intent.getStringExtra(EXTRA_ALARM_PLAYLIST_ID).orEmpty()
-        if (playlistId.isBlank()) return
+        val alarmId = intent.getStringExtra(EXTRA_ALARM_ID).orEmpty()
+        if (playlistId.isBlank()) {
+            if (alarmId.isNotBlank()) {
+                scope.launch(Dispatchers.IO) {
+                    try {
+                        val alarms = MusicAlarmStore.load(this@MusicService)
+                        val updated = alarms.map { alarm ->
+                            if (alarm.id == alarmId) alarm.copy(enabled = false, nextTriggerAt = -1L) else alarm
+                        }
+                        MusicAlarmScheduler.scheduleAll(this@MusicService, updated)
+                    } catch (t: Throwable) {
+                        Timber.tag(TAG).e(t, "Failed to disable alarm with invalid playlist")
+                    }
+                }
+            }
+            return
+        }
         val randomSong = intent.getBooleanExtra(EXTRA_ALARM_RANDOM_SONG, false)
         scope.launch {
-            val playlistSongs = withContext(Dispatchers.IO) {
-                database.playlistSongs(playlistId).first()
-            }
-            if (playlistSongs.isEmpty()) return@launch
-            val items = playlistSongs.map { it.song.toMediaItem() }
-            val playlistName = withContext(Dispatchers.IO) {
-                database.playlist(playlistId).first()?.playlist?.name
-            }
-
-            val alarmItems =
-                if (randomSong) {
-                    val firstIndex = Random.nextInt(items.size)
-                    buildList(items.size) {
-                        add(items[firstIndex])
-                        items.forEachIndexed { index, item ->
-                            if (index != firstIndex) add(item)
+            try {
+                val playlistSongs = withContext(Dispatchers.IO) {
+                    database.playlistSongs(playlistId).first()
+                }
+                if (playlistSongs.isEmpty()) {
+                    if (alarmId.isNotBlank()) {
+                        withContext(Dispatchers.IO) {
+                            val alarms = MusicAlarmStore.load(this@MusicService)
+                            val updated = alarms.map { alarm ->
+                                if (alarm.id == alarmId) alarm.copy(enabled = false, nextTriggerAt = -1L) else alarm
+                            }
+                            MusicAlarmScheduler.scheduleAll(this@MusicService, updated)
                         }
                     }
-                } else {
-                    items
+                    return@launch
+                }
+                val items = playlistSongs.map { it.song.toMediaItem() }
+                val playlistName = withContext(Dispatchers.IO) {
+                    database.playlist(playlistId).first()?.playlist?.name
+                }
+                withContext(Dispatchers.IO) {
+                    MusicAlarmScheduler.scheduleFromPreferences(this@MusicService)
                 }
 
-            player.stop()
-            player.clearMediaItems()
-            playQueue(
-                ListQueue(
-                    title = playlistName,
-                    items = alarmItems,
-                    startIndex = 0,
-                    position = 0L
-                ),
-                playWhenReady = true
-            )
+                val alarmItems =
+                    if (randomSong) {
+                        val firstIndex = Random.nextInt(items.size)
+                        buildList(items.size) {
+                            add(items[firstIndex])
+                            items.forEachIndexed { index, item ->
+                                if (index != firstIndex) add(item)
+                            }
+                        }
+                    } else {
+                        items
+                    }
+
+                player.stop()
+                player.clearMediaItems()
+                playQueue(
+                    ListQueue(
+                        title = playlistName,
+                        items = alarmItems,
+                        startIndex = 0,
+                        position = 0L
+                    ),
+                    playWhenReady = true
+                )
+            } catch (t: Throwable) {
+                Timber.tag(TAG).e(t, "Failed to start alarm playback")
+            }
         }
     }
 
